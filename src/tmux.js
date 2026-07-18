@@ -8,7 +8,7 @@ export function buildCaptureArgs(pane, lines = 200) {
 }
 
 export function buildSendKeysArgs(pane, text) {
-  return ['send-keys', '-t', pane, text, 'Enter'];
+  return ['send-keys', '-t', pane, '-l', text];
 }
 
 export function buildDisplayArgs(pane, format) {
@@ -33,6 +33,7 @@ export async function capturePane(pane, lines = 200) {
 
 export async function sendKeys(pane, text) {
   await execFileAsync('tmux', buildSendKeysArgs(pane, text));
+  await execFileAsync('tmux', ['send-keys', '-t', pane, 'Enter']);
 }
 
 export async function getPaneCommand(pane) {
