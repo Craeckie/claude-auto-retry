@@ -1,4 +1,4 @@
-import { stripAnsi, isRateLimited, findRateLimitMessage } from './patterns.js';
+import { stripAnsi, isRateLimited, isOverloaded, findRateLimitMessage } from './patterns.js';
 import { parseResetTime, calculateWaitMs } from './time-parser.js';
 import { capturePane, sendKeys, getPaneCommand, isProcessForeground } from './tmux.js';
 import { loadConfig } from './config.js';
@@ -22,7 +22,9 @@ export async function processOneTick(state, tmuxAdapter, pane, config, isAlive) 
 
     // Always check if rate limit cleared FIRST — even when maxRetries
     // exhausted, the user (or time passing) may have resolved it.
-    if (!isRateLimited(stripped, config.customPatterns)) {
+    // (isOverloaded also returns false while Claude Code auto-retries
+    // on its own — treated as "handled", so we keep watching.)
+    if (!isRateLimited(stripped, config.customPatterns) && !isOverloaded(stripped)) {
       state.status = 'monitoring'; state.attempts = 0;
       return 'user-continued';
     }
@@ -56,6 +58,15 @@ export async function processOneTick(state, tmuxAdapter, pane, config, isAlive) 
     state.waitUntil = Date.now() + 30_000;
     await tmuxAdapter.sendKeys(pane, config.retryMessage);
     return 'retried';
+  }
+
+  // Server overload (529) has no reset time — retry after a short wait
+  // instead of the multi-hour rate-limit fallback.
+  if (isOverloaded(stripped)) {
+    state.lastRateLimitMessage = 'API Error: 529 Overloaded';
+    state.waitUntil = Date.now() + config.overloadWaitSeconds * 1000;
+    state.status = 'waiting';
+    return 'waiting';
   }
 
   if (isRateLimited(stripped, config.customPatterns)) {

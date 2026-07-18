@@ -39,6 +39,36 @@ const RESET_PATTERNS = [
 ];
 
 const WINDOW = 6;
+// Character-distance equivalent of WINDOW for wrap-tolerant matching on
+// flattened text (a few wrapped narrow-terminal lines, not whole screens)
+const FLAT_WINDOW = 300;
+
+// Narrow terminals wrap messages at arbitrary points, splitting a phrase
+// across lines. Collapsing all whitespace lets patterns match regardless
+// of where the terminal wrapped.
+function flatten(lines) {
+  return lines.join(' ').replace(/\s+/g, ' ');
+}
+
+// Server overload, e.g.:
+//   "API Error: 529 Overloaded. This is a server-side issue, usually
+//    temporary — try again in a moment. If it persists, check
+//    https://status.claude.com."
+// Unlike rate limits, there is no reset time — retry after a short wait.
+const OVERLOAD_PATTERN = /api error:?\s*529\s*overloaded/i;
+
+// Claude Code's own auto-retry indicator, e.g.:
+//   "529 Overloaded · Retrying in 5s · attempt 5/10"
+// While this is on screen Claude Code is still handling the error itself.
+const AUTO_RETRY_PATTERN = /retrying in \d+s/i;
+
+export function isOverloaded(text) {
+  const flat = flatten(stripAnsi(text).split('\n'));
+  if (!OVERLOAD_PATTERN.test(flat)) return false;
+  // Claude Code is still auto-retrying on its own; don't intervene yet.
+  if (AUTO_RETRY_PATTERN.test(flat)) return false;
+  return true;
+}
 
 function hasNearbyMatch(lines, idx, patterns) {
   const start = Math.max(0, idx - WINDOW);
@@ -67,6 +97,19 @@ export function isRateLimited(text, customPatterns = []) {
     }
   }
 
+  // Fallback for narrow terminals where a phrase like "hit your limit"
+  // wraps mid-pattern: match against the whitespace-collapsed capture,
+  // with a character-distance window standing in for the line window.
+  const flat = flatten(lines);
+  for (const lp of LIMIT_PATTERNS) {
+    const lm = lp.exec(flat);
+    if (!lm) continue;
+    for (const rp of RESET_PATTERNS) {
+      const rm = rp.exec(flat);
+      if (rm && Math.abs(rm.index - lm.index) <= FLAT_WINDOW) return true;
+    }
+  }
+
   return false;
 }
 
@@ -81,6 +124,13 @@ export function findRateLimitMessage(text, customPatterns = []) {
   // Fallback: any "limit" line
   for (const line of lines) {
     if (LIMIT_PATTERNS.some(p => p.test(line))) return line.trim();
+  }
+
+  // Wrapped output: no single line matched, but the collapsed capture does
+  // (parseResetTime searches within the string, so surrounding text is fine).
+  const flat = flatten(lines);
+  if (RESET_PATTERNS.some(p => p.test(flat)) || LIMIT_PATTERNS.some(p => p.test(flat))) {
+    return flat.trim();
   }
 
   return null;

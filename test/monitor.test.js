@@ -103,6 +103,32 @@ describe('processOneTick', () => {
     assert.equal(s.status, 'waiting');
     assert.ok(s.waitUntil > Date.now());
   });
+  it('enters waiting with a short wait on 529 Overloaded', async () => {
+    const t = mockTmux('API Error: 529 Overloaded. This is a server-side issue,\nusually temporary — try again in a moment.\nIf it persists, check https://status.claude.com.');
+    const s = createMonitorState();
+    assert.equal(await processOneTick(s, t, '%0', DEFAULT_CONFIG, () => true), 'waiting');
+    const waitMs = s.waitUntil - Date.now();
+    assert.ok(waitMs > 0 && waitMs <= DEFAULT_CONFIG.overloadWaitSeconds * 1000);
+  });
+  it('keeps monitoring while Claude Code auto-retries a 529', async () => {
+    const t = mockTmux('529 Overloaded · Retrying in 5s · attempt 5/10\nAPI Error: 529 Overloaded. Try again in a moment.');
+    const s = createMonitorState();
+    assert.equal(await processOneTick(s, t, '%0', DEFAULT_CONFIG, () => true), 'monitoring');
+  });
+  it('sends retry when wait expired and 529 still visible', async () => {
+    const t = mockTmux('API Error: 529 Overloaded. Try again in a moment.');
+    const s = createMonitorState();
+    s.waitUntil = Date.now() - 1000; s.status = 'waiting';
+    assert.equal(await processOneTick(s, t, '%0', DEFAULT_CONFIG, () => true), 'retried');
+    assert.equal(t._sent.length, 1);
+  });
+  it('resets counter when 529 clears during wait', async () => {
+    const t = mockTmux('Claude is working normally');
+    const s = createMonitorState();
+    s.waitUntil = Date.now() - 1000; s.status = 'waiting'; s.attempts = 2;
+    assert.equal(await processOneTick(s, t, '%0', DEFAULT_CONFIG, () => true), 'user-continued');
+    assert.equal(s.attempts, 0);
+  });
   it('resets from max-retries when rate limit clears', async () => {
     const t = mockTmux('Claude is working normally');
     const s = createMonitorState();

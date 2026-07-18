@@ -93,8 +93,15 @@ The tool detects these real-world Claude Code messages:
 | Try again | `Please try again in 5 hours` |
 | Hit your limit | `You've hit your limit · resets 3pm (Europe/Dublin)` |
 | Rate limit | `Rate limit hit. Resets at 4pm` |
+| Server overload | `API Error: 529 Overloaded. This is a server-side issue...` |
 
 Custom patterns can be added via config for future message format changes.
+
+Detection is wrap-tolerant: messages split across lines by narrow terminals (e.g. phones, split panes) are still recognized.
+
+### 529 Overloaded
+
+Server overload errors have no reset time, so they're handled differently: the tool waits a short interval (`overloadWaitSeconds`, default 30s) and retries. While Claude Code is still auto-retrying on its own (`529 Overloaded · Retrying in 5s · attempt 5/10`), the tool stays hands-off — it only steps in once Claude Code has given up.
 
 ## Configuration
 
@@ -106,6 +113,7 @@ Optional. Create `~/.claude-auto-retry.json`:
   "pollIntervalSeconds": 5,
   "marginSeconds": 60,
   "fallbackWaitHours": 5,
+  "overloadWaitSeconds": 30,
   "retryMessage": "Continue where you left off. The previous attempt was rate limited.",
   "customPatterns": ["my custom pattern"]
 }
@@ -117,6 +125,7 @@ Optional. Create `~/.claude-auto-retry.json`:
 | `pollIntervalSeconds` | `5` | How often to check the terminal (seconds) |
 | `marginSeconds` | `60` | Extra wait after reset time (seconds) |
 | `fallbackWaitHours` | `5` | Wait time if reset time can't be parsed |
+| `overloadWaitSeconds` | `30` | Wait before retrying after a 529 Overloaded error |
 | `retryMessage` | `"Continue where..."` | Message sent to Claude on retry |
 | `customPatterns` | `[]` | Additional regex patterns to detect rate limits |
 
@@ -209,7 +218,7 @@ Contributions are welcome! Here's how to get started:
 ```bash
 git clone https://github.com/cheapestinference/claude-auto-retry.git
 cd claude-auto-retry
-npm test            # Run all 59 tests
+npm test            # Run the test suite
 npm link            # Install locally for testing
 ```
 
@@ -227,7 +236,7 @@ claude-auto-retry/
 │   ├── monitor.js          # Core monitoring loop + retry logic
 │   ├── launcher.js         # Process orchestration + signal forwarding
 │   └── wrapper.sh          # Shell function template
-├── test/                   # 59 tests across 7 test files
+├── test/                   # 100+ tests across 7 test files
 ├── package.json
 ├── LICENSE
 └── README.md

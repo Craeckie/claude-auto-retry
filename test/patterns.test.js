@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { stripAnsi, isRateLimited, findRateLimitMessage } from '../src/patterns.js';
+import { stripAnsi, isRateLimited, isOverloaded, findRateLimitMessage } from '../src/patterns.js';
 
 describe('stripAnsi', () => {
   it('removes bold codes', () => {
@@ -106,11 +106,59 @@ describe('isRateLimited (multi-line TUI renders)', () => {
   it('detects middle-dot separated multi-line', () => {
     assert.ok(isRateLimited('⚠ You\'ve hit your 5-hour limit\n· resets 3pm (Asia/Tbilisi)'));
   });
-  it('rejects limit + resets too far apart (>6 lines)', () => {
-    assert.equal(isRateLimited('hit your limit\n1\n2\n3\n4\n5\n6\n7\nresets 3pm'), false);
+  it('rejects limit + resets too far apart (>6 lines of real content)', () => {
+    const filler = Array.from({ length: 8 }, (_, i) =>
+      `line ${i}: some ordinary terminal output from an unrelated command running here`
+    ).join('\n');
+    assert.equal(isRateLimited(`hit your limit\n${filler}\nresets 3pm`), false);
   });
   it('rejects normal output with no rate limit keywords', () => {
     assert.equal(isRateLimited('Working on your request\nHere is the code\nDone'), false);
+  });
+});
+
+describe('isOverloaded', () => {
+  const fullMessage = 'API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.';
+  it('detects the full 529 message on one line', () => {
+    assert.equal(isOverloaded(fullMessage), true);
+  });
+  it('detects the 529 message wrapped at a wide terminal', () => {
+    const text = '● API Error: 529 Overloaded. This is a server-side issue,\nusually temporary — try again in a moment.\nIf it persists, check https://status.claude.com.';
+    assert.equal(isOverloaded(text), true);
+  });
+  it('detects the 529 message wrapped at a narrow terminal (mid-phrase)', () => {
+    const text = '● API Error: 529\nOverloaded. This is a\nserver-side issue, usually\ntemporary — try again in a\nmoment. If it persists, check\nhttps://status.claude.com.';
+    assert.equal(isOverloaded(text), true);
+  });
+  it('does not intervene while Claude Code auto-retries', () => {
+    const text = fullMessage + '\n\n✻ 529 Overloaded · Retrying in 5s · attempt 5/10\n  If it persists, check https://status.claude.com.';
+    assert.equal(isOverloaded(text), false);
+  });
+  it('does not intervene while auto-retry line is wrapped', () => {
+    const text = fullMessage + '\n✻ 529 Overloaded · Retrying\nin 14s · attempt 6/10';
+    assert.equal(isOverloaded(text), false);
+  });
+  it('detects 529 through ANSI codes', () => {
+    assert.equal(isOverloaded('\x1b[33mAPI Error: 529 Overloaded.\x1b[0m Try again in a moment.'), true);
+  });
+  it('returns false for normal output', () => {
+    assert.equal(isOverloaded('I can help you with that code'), false);
+  });
+  it('returns false for a rate limit message', () => {
+    assert.equal(isOverloaded('5-hour limit reached - resets 3pm (UTC)'), false);
+  });
+  it('529 message alone is not treated as a rate limit', () => {
+    assert.equal(isRateLimited(fullMessage), false);
+  });
+});
+
+describe('isRateLimited (wrapped narrow-terminal output)', () => {
+  it('detects limit phrase split across wrapped lines', () => {
+    assert.ok(isRateLimited("You've hit your\nlimit · resets\n3pm (Europe/Dublin)"));
+  });
+  it('findRateLimitMessage returns parseable text for wrapped output', () => {
+    const msg = findRateLimitMessage("You've hit your\nlimit · resets\n3pm (Europe/Dublin)");
+    assert.ok(msg.includes('resets 3pm'));
   });
 });
 
