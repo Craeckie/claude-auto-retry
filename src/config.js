@@ -8,6 +8,7 @@ export const DEFAULT_CONFIG = {
   marginSeconds: 60,
   fallbackWaitHours: 5,
   overloadWaitSeconds: 30,
+  retryCooldownSeconds: 300,
   retryMessage: 'Continue where you left off. The previous attempt was rate limited.',
   customPatterns: [],
 };
@@ -24,6 +25,7 @@ function validate(cfg) {
   cfg.marginSeconds = validNumber(cfg.marginSeconds, 0, DEFAULT_CONFIG.marginSeconds);
   cfg.fallbackWaitHours = validNumber(cfg.fallbackWaitHours, 0.1, DEFAULT_CONFIG.fallbackWaitHours);
   cfg.overloadWaitSeconds = validNumber(cfg.overloadWaitSeconds, 5, DEFAULT_CONFIG.overloadWaitSeconds);
+  cfg.retryCooldownSeconds = validNumber(cfg.retryCooldownSeconds, 5, DEFAULT_CONFIG.retryCooldownSeconds);
   if (typeof cfg.retryMessage !== 'string' || !cfg.retryMessage) {
     cfg.retryMessage = DEFAULT_CONFIG.retryMessage;
   }

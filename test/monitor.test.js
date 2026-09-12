@@ -44,6 +44,16 @@ describe('processOneTick', () => {
     assert.equal(s.status, 'waiting');
     assert.ok(s.waitUntil > Date.now());
   });
+  it('uses configured retryCooldownSeconds for the post-retry wait', async () => {
+    const t = mockTmux('5-hour limit reached - resets 3pm (UTC)');
+    const s = createMonitorState();
+    s.waitUntil = Date.now() - 1000; s.status = 'waiting';
+    const config = { ...DEFAULT_CONFIG, retryCooldownSeconds: 45 };
+    const before = Date.now();
+    assert.equal(await processOneTick(s, t, '%0', config, () => true), 'retried');
+    assert.ok(s.waitUntil >= before + 45_000);
+    assert.ok(s.waitUntil < before + 46_000);
+  });
   it('detects multi-line TUI rate limit', async () => {
     const t = mockTmux('⚠ You\'ve hit your limit\n· resets 3pm (UTC)');
     const s = createMonitorState();

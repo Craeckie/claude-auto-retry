@@ -8,6 +8,7 @@ describe('DEFAULT_CONFIG', () => {
     assert.equal(DEFAULT_CONFIG.pollIntervalSeconds, 5);
     assert.equal(DEFAULT_CONFIG.marginSeconds, 60);
     assert.equal(DEFAULT_CONFIG.fallbackWaitHours, 5);
+    assert.equal(DEFAULT_CONFIG.retryCooldownSeconds, 300);
     assert.equal(typeof DEFAULT_CONFIG.retryMessage, 'string');
     assert.deepEqual(DEFAULT_CONFIG.customPatterns, []);
   });
@@ -51,6 +52,28 @@ describe('loadConfig', () => {
       const config = await loadConfig(f);
       assert.equal(config.maxRetries, 5);
       assert.equal(config.pollIntervalSeconds, 5);
+    } finally { await unlink(f); }
+  });
+  it('respects a custom retryCooldownSeconds', async () => {
+    const { writeFile, unlink } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const f = join(tmpdir(), `car-test-${Date.now()}.json`);
+    await writeFile(f, JSON.stringify({ retryCooldownSeconds: 60 }));
+    try {
+      const config = await loadConfig(f);
+      assert.equal(config.retryCooldownSeconds, 60);
+    } finally { await unlink(f); }
+  });
+  it('falls back to default for an invalid retryCooldownSeconds', async () => {
+    const { writeFile, unlink } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const f = join(tmpdir(), `car-test-${Date.now()}.json`);
+    await writeFile(f, JSON.stringify({ retryCooldownSeconds: 1 }));
+    try {
+      const config = await loadConfig(f);
+      assert.equal(config.retryCooldownSeconds, DEFAULT_CONFIG.retryCooldownSeconds);
     } finally { await unlink(f); }
   });
   it('filters invalid customPatterns entries', async () => {

@@ -55,7 +55,7 @@ export async function processOneTick(state, tmuxAdapter, pane, config, isAlive) 
     // Increment attempts and set cooldown BEFORE sendKeys so that a failure
     // (e.g. pane destroyed) still consumes a retry and avoids tight-loop errors.
     state.attempts++;
-    state.waitUntil = Date.now() + 30_000;
+    state.waitUntil = Date.now() + config.retryCooldownSeconds * 1000;
     await tmuxAdapter.sendKeys(pane, config.retryMessage);
     return 'retried';
   }

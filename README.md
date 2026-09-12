@@ -114,6 +114,7 @@ Optional. Create `~/.claude-auto-retry.json`:
   "marginSeconds": 60,
   "fallbackWaitHours": 5,
   "overloadWaitSeconds": 30,
+  "retryCooldownSeconds": 300,
   "retryMessage": "Continue where you left off. The previous attempt was rate limited.",
   "customPatterns": ["my custom pattern"]
 }
@@ -126,6 +127,7 @@ Optional. Create `~/.claude-auto-retry.json`:
 | `marginSeconds` | `60` | Extra wait after reset time (seconds) |
 | `fallbackWaitHours` | `5` | Wait time if reset time can't be parsed |
 | `overloadWaitSeconds` | `30` | Wait before retrying after a 529 Overloaded error |
+| `retryCooldownSeconds` | `300` | Wait after sending a "Continue.." retry message before checking again |
 | `retryMessage` | `"Continue where..."` | Message sent to Claude on retry |
 | `customPatterns` | `[]` | Additional regex patterns to detect rate limits |
 
